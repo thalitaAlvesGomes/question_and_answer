@@ -1,6 +1,3 @@
-import 'dart:html';
-import 'dart:js_util';
-
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -8,56 +5,86 @@ import 'package:flutter/material.dart';
 
 class QuestionCreate extends StatelessWidget {
   FirebaseFirestore firestore = FirebaseFirestore.instance;
+
   FirebaseAuth auth = FirebaseAuth.instance;
+
   final TextEditingController txtQuestion = TextEditingController();
 
-  List<String> users = [];
-  List<String> user = [];
+  String user = '';
+
+  bool checkVote = true;
+
   void insert() {
     firestore.collection('questions').add({
       'question': txtQuestion.text,
       'votes': 0,
       'user': 'Anonymous',
-      'userVoted': []
+      'uid': auth.currentUser!.uid,
+      'userVoted': [],
+      'date': DateTime.now()
     });
   }
 
-  void getUsers(String id, String campo) async {
-    //users = firestore.collection('questions').doc(id).get();
-    DocumentSnapshot documentSnapshot =
-        await firestore.collection('questions').doc(id).get();
-    users = documentSnapshot.data()[campo];
-    print(documentSnapshot);
-  }
-
-  void currentUser() {
-    String user = auth.currentUser!.uid;
-    print(user);
-  }
-
   void countVotes(String id, int votes) {
-    if (users.contains(user)) {
-      votes = votes - 1;
-    } else {
-      firestore
-          .collection('questions')
-          .doc(id)
-          .update({'userVoted': FieldValue.arrayUnion(user)});
-    }
+    user = auth.currentUser!.uid; //pegar o uid atual
+
+    firestore.collection('questions').doc(id).get().then((documentSnapshot) {
+      List users = documentSnapshot
+          .data()?['userVoted']; //para armazenar os usuários dentro do "voto"
+
+      if (users != null && users.contains(user)) {
+        checkVote = true;
+      } else {
+        checkVote = false;
+      }
+      print(checkVote);
+
+      if (checkVote == false) {
+        firestore.collection('questions').doc(id).update({
+          'userVoted': FieldValue.arrayUnion([user]),
+          'votes': votes + 1,
+        });
+        checkVote = true;
+      }
+    });
   }
 
-  void votes(String id, int votes) {
-    currentUser();
-    getUsers(id);
-    countVotes(id, votes);
-  }
+  // void getCampo(id) async {
+  //   DocumentReference document =
+  //       await FirebaseFirestore.instance.collection("questions").doc(id);
+
+  //   document.get().then((value) {
+  //     users = value["userVoted"];
+  //   });
+  //   print(users);
+  // }
+
+  // void countVotes(String id, int votes) {
+  //   user = [auth.currentUser!.uid];
+  //   print(user);
+  //   if (users.contains(user[0])) {
+  //     votes = votes;
+  //   } else {
+  //     votes = (votes + 1);
+  //     firestore.collection('questions').doc(id).update({
+  //       'userVoted': FieldValue.arrayUnion([user]),
+  //       'votes': votes
+  //     });
+  //   }
+  // }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.purple[300],
-        title: Center(child: Text("Q&A")),
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text("Q&A"),
+            Text("CODE: CODIGO")
+          ],
+        ),
       ),
       body: Container(
         margin: EdgeInsets.all(30),
@@ -98,7 +125,6 @@ class QuestionCreate extends StatelessWidget {
                         ),
                         ElevatedButton(
                           onPressed: () {
-                            // Ação do botão
                             insert();
                             txtQuestion.clear();
                           },
@@ -119,6 +145,7 @@ class QuestionCreate extends StatelessWidget {
                 stream: firestore
                     .collection('questions')
                     .orderBy('votes', descending: true)
+                    .orderBy('date', descending: false)
                     .snapshots(),
                 builder: (context, snapshot) {
                   if (!snapshot.hasData) return CircularProgressIndicator();
@@ -155,10 +182,10 @@ class QuestionCreate extends StatelessWidget {
                               children: [
                                 IconButton(
                                     onPressed: () {
-                                      key:
                                       Key(question.id);
-                                      // countVotes(question.id,question['votes']);
-                                      votes(question.id, question['votes']);
+
+                                      countVotes(
+                                          question.id, question['votes']);
                                     },
                                     icon: Icon(Icons.thumb_up)),
                                 SizedBox(width: 10),
